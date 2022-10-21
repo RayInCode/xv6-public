@@ -1,0 +1,11 @@
+*.o
+*.tex 
+*.dvi 
+*.idx 
+*.aux 
+*.log 
+*.ind 
+*.ilg 
+*.d 
+*.asm 
+*.sym
