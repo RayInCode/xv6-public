@@ -1,3 +1,4 @@
+#include pstat.h
 // Per-CPU state
 struct cpu {
   uchar apicid;                // Local APIC ID
@@ -40,6 +41,7 @@ struct proc {
   pde_t* pgdir;                // Page table
   char *kstack;                // Bottom of kernel stack for this process
   enum procstate state;        // Process state
+  struct pstat *schedstate;
   int pid;                     // Process ID
   struct proc *parent;         // Parent process
   struct trapframe *tf;        // Trap frame for current syscall
