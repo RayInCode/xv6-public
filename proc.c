@@ -6,6 +6,7 @@
 #include "x86.h"
 #include "proc.h"
 #include "spinlock.h"
+#include "pstat.h"
 
 struct {
   struct spinlock lock;
@@ -88,6 +89,7 @@ allocproc(void)
 found:
   p->state = EMBRYO;
   p->pid = nextpid++;
+  p->ticks = 0;
 
   release(&ptable.lock);
 
@@ -198,6 +200,7 @@ fork(void)
   }
   np->sz = curproc->sz;
   np->parent = curproc;
+  np->priority = curproc->priority;
   *np->tf = *curproc->tf;
 
   // Clear %eax so that fork returns 0 in the child.
@@ -322,6 +325,9 @@ wait(void)
 void
 scheduler(void)
 {
+  // int priority = 1;
+  // int index;
+  // int last;
   struct proc *p;
   struct cpu *c = mycpu();
   c->proc = 0;
@@ -330,8 +336,54 @@ scheduler(void)
     // Enable interrupts on this processor.
     sti();
 
-    // Loop over process table looking for process to run.
+
     acquire(&ptable.lock);
+    // for(index = 0; index < NPROC; index++){
+    //   if(index == last){
+    //     priority = 0;
+    //   }
+    //   p = &ptable.proc[index];
+    //   if(p->state != RUNNABLE)
+    //     continue;
+      
+    //   if(priority == 0){
+    //     priority = 1;
+    //     // Switch to chosen process.  It is the process's job
+    //     // to release ptable.lock and then reacquire it
+    //     // before jumping back to us.
+    //     c->proc = p;
+    //     switchuvm(p);
+    //     p->state = RUNNING;
+    //     last = index;
+
+    //     swtch(&(c->scheduler), p->context);
+    //     switchkvm();
+
+    //     // Process is done running for now.
+    //     // It should have changed its p->state before coming back.
+    //     c->proc = 0;
+    //   }else{
+    //     if(p->priority == 1){
+    //       // Switch to chosen process.  It is the process's job
+    //       // to release ptable.lock and then reacquire it
+    //       // before jumping back to us.
+    //       c->proc = p;
+    //       switchuvm(p);
+    //       p->state = RUNNING;
+    //       last = index;
+
+    //       swtch(&(c->scheduler), p->context);
+    //       switchkvm();
+
+    //       // Process is done running for now.
+    //       // It should have changed its p->state before coming back.
+    //       c->proc = 0;
+    //     }
+    //   }
+    // }
+
+    // Loop over process table looking for process to run.
+    
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
       if(p->state != RUNNABLE)
         continue;
@@ -377,6 +429,8 @@ sched(void)
   if(readeflags()&FL_IF)
     panic("sched interruptible");
   intena = mycpu()->intena;
+  // update the ticks even the process just exit or sleep
+  p->ticks++;
   swtch(&p->context, mycpu()->scheduler);
   mycpu()->intena = intena;
 }
@@ -531,4 +585,32 @@ procdump(void)
     }
     cprintf("\n");
   }
+}
+
+int
+setprio(int prio){
+  struct proc *p = myproc();
+  // check argument
+  if(prio != 0 && prio != 1){
+    return -1;
+  }
+  p->priority = prio;
+  return 0;
+}
+
+int getpinfo(struct pstat *pstat){
+  //check arg
+  if(!pstat){
+    return -1;
+  }
+
+  struct proc *p;
+  for(int i = 0; i < NPROC; i++){
+    p = &ptable.proc[i];
+    pstat->inuse[i] = (p->state == UNUSED);
+    pstat->pid[i] = p->pid;
+    pstat->priority[i] = p->priority;
+    pstat->ticks[i] = p->ticks;
+  }
+  return 0;
 }
