@@ -115,11 +115,23 @@ sys_getpinfo(void)
 int
 sys_mprotect(void)
 {
-  return 0;
+  void *addr;
+  int len;
+  if(argptr(0, (char**)&addr, 1) < 0 || argint(1, &len) < 0){
+    return -1;
+  }
+
+  return mprotect((void *)addr, len);
 }
 
 int
 sys_munprotect(void)
 {
-  return 0;
+  void *addr;
+  int len;
+  if(argptr(0, (char**)&addr, 1) < 0 || argint(1, &len) < 0){
+    return -1;
+  }
+
+  return munprotect((void *)addr, len);
 }
