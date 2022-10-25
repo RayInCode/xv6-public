@@ -1,3 +1,7 @@
+.vscode/
+.gitignore
+tests/
+tests-out/
 *.o
 *.tex 
 *.dvi 
@@ -9,3 +13,8 @@
 *.d 
 *.asm 
 *.sym
+test_*.c
+_test_*
+Makefile.test
+.__afs*
+

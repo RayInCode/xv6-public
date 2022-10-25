@@ -25,7 +25,7 @@
           "targetArchitecture": "x86_64",
           "customLaunchSetupCommands": [
               {
-                  "text": "target remote localhost:26000",
+                  "text": "target remote localhost:29367",
                   "description": "Connect to QEMU remote debugger"
               },
               {

@@ -93,13 +93,33 @@ sys_uptime(void)
 }
 
 int 
-sys_setprio(void)
+sys_settickets(void)
 {
-  return 0;
+  int prio;
+  if(argint(0, &prio) < 0){
+    return -1;
+  }
+  return settickets(prio);
 }
 
 int 
 sys_getpinfo(void)
+{
+  struct pstat *pstat;
+  if(argptr(0, (char**)&pstat, sizeof(struct pstat)) < 0){
+    return -1;
+  }
+  return getpinfo((struct pstat *)pstat);
+}
+
+int
+sys_mprotect(void)
+{
+  return 0;
+}
+
+int
+sys_munprotect(void)
 {
   return 0;
 }

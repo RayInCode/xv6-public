@@ -8,6 +8,8 @@
 #include "spinlock.h"
 #include "pstat.h"
 
+#define MY_SCHEDULER
+
 struct {
   struct spinlock lock;
   struct proc proc[NPROC];
@@ -89,6 +91,7 @@ allocproc(void)
 found:
   p->state = EMBRYO;
   p->pid = nextpid++;
+  p->priority = 1;
   p->ticks = 0;
 
   release(&ptable.lock);
@@ -185,6 +188,7 @@ fork(void)
   int i, pid;
   struct proc *np;
   struct proc *curproc = myproc();
+  //pte_t *nullpte = (pte_t*)P2V(PTE_ADDR(*(curproc->pgdir)));
 
   // Allocate process.
   if((np = allocproc()) == 0){
@@ -192,12 +196,14 @@ fork(void)
   }
 
   // Copy process state from proc.
+
   if((np->pgdir = copyuvm(curproc->pgdir, curproc->sz)) == 0){
     kfree(np->kstack);
     np->kstack = 0;
     np->state = UNUSED;
     return -1;
   }
+  //*nullpte &= ~PTE_P; // set first pde in pgdir to not present
   np->sz = curproc->sz;
   np->parent = curproc;
   np->priority = curproc->priority;
@@ -325,9 +331,13 @@ wait(void)
 void
 scheduler(void)
 {
-  // int priority = 1;
-  // int index;
-  // int last;
+
+  #ifdef MY_SCHEDULER
+  int priority = 1;
+  int index;
+  int last = NPROC;
+  #endif
+
   struct proc *p;
   struct cpu *c = mycpu();
   c->proc = 0;
@@ -338,52 +348,56 @@ scheduler(void)
 
 
     acquire(&ptable.lock);
-    // for(index = 0; index < NPROC; index++){
-    //   if(index == last){
-    //     priority = 0;
-    //   }
-    //   p = &ptable.proc[index];
-    //   if(p->state != RUNNABLE)
-    //     continue;
+    #ifdef MY_SCHEDULER
+    for(index = 0; index < NPROC; index++){
+     
+      if(index == last){
+        priority = 0;
+      }
+      p = &ptable.proc[index];
+      if(p->state != RUNNABLE)
+        continue;
       
-    //   if(priority == 0){
-    //     priority = 1;
-    //     // Switch to chosen process.  It is the process's job
-    //     // to release ptable.lock and then reacquire it
-    //     // before jumping back to us.
-    //     c->proc = p;
-    //     switchuvm(p);
-    //     p->state = RUNNING;
-    //     last = index;
+      if(priority == 0){
+        priority = 1;
+        // Switch to chosen process.  It is the process's job
+        // to release ptable.lock and then reacquire it
+        // before jumping back to us.
+        c->proc = p;
+        switchuvm(p);
+        p->state = RUNNING;
+        last = index;
+        //cprintf("sched_prio:%d\trunning_proc_name:%s\tpid:%d\tproc_priority:%d\tticks:%d\n",priority, p->name, p->pid, p->priority, p->ticks);
+        swtch(&(c->scheduler), p->context);
+        switchkvm();
 
-    //     swtch(&(c->scheduler), p->context);
-    //     switchkvm();
+        // Process is done running for now.
+        // It should have changed its p->state before coming back.
+        c->proc = 0;
+      }else{
+        if(p->priority == 1){
+          // Switch to chosen process.  It is the process's job
+          // to release ptable.lock and then reacquire it
+          // before jumping back to us.
+          c->proc = p;
+          switchuvm(p);
+          p->state = RUNNING;
+          last = index;
+          //cprintf("sched_prio:%d\trunning_proc_name:%s\tpid:%d\tproc_priority:%d\tticks:%d\n",priority, p->name, p->pid, p->priority, p->ticks);
+          swtch(&(c->scheduler), p->context);
+          switchkvm();
 
-    //     // Process is done running for now.
-    //     // It should have changed its p->state before coming back.
-    //     c->proc = 0;
-    //   }else{
-    //     if(p->priority == 1){
-    //       // Switch to chosen process.  It is the process's job
-    //       // to release ptable.lock and then reacquire it
-    //       // before jumping back to us.
-    //       c->proc = p;
-    //       switchuvm(p);
-    //       p->state = RUNNING;
-    //       last = index;
-
-    //       swtch(&(c->scheduler), p->context);
-    //       switchkvm();
-
-    //       // Process is done running for now.
-    //       // It should have changed its p->state before coming back.
-    //       c->proc = 0;
-    //     }
-    //   }
-    // }
+          // Process is done running for now.
+          // It should have changed its p->state before coming back.
+          c->proc = 0;
+        }
+      }
+       
+    }
+    #endif
 
     // Loop over process table looking for process to run.
-    
+    #ifndef MY_SCHEDULER
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
       if(p->state != RUNNABLE)
         continue;
@@ -394,7 +408,7 @@ scheduler(void)
       c->proc = p;
       switchuvm(p);
       p->state = RUNNING;
-
+      //cprintf("running_proc_name:%s\tpid:%d\tproc_priority:%d\tticks:%d\n", p->name, p->pid, p->priority, p->ticks);
       swtch(&(c->scheduler), p->context);
       switchkvm();
 
@@ -402,7 +416,9 @@ scheduler(void)
       // It should have changed its p->state before coming back.
       c->proc = 0;
     }
+    #endif
     release(&ptable.lock);
+   
 
   }
 }
@@ -588,7 +604,7 @@ procdump(void)
 }
 
 int
-setprio(int prio){
+settickets(int prio){
   struct proc *p = myproc();
   // check argument
   if(prio != 0 && prio != 1){
@@ -603,14 +619,27 @@ int getpinfo(struct pstat *pstat){
   if(!pstat){
     return -1;
   }
-
   struct proc *p;
+  acquire(&ptable.lock);
   for(int i = 0; i < NPROC; i++){
     p = &ptable.proc[i];
-    pstat->inuse[i] = (p->state == UNUSED);
+    pstat->inuse[i] = !(p->state == UNUSED);
     pstat->pid[i] = p->pid;
-    pstat->priority[i] = p->priority;
+    pstat->tickets[i] = p->priority;
     pstat->ticks[i] = p->ticks;
+    //cprintf("pstat%d: inuse:%d\t pid:%d\t tickets:%d ticks:%d\n", i, pstat->inuse[i], pstat->pid[i], pstat->tickets[i], pstat->ticks[i]);
   }
+  
+  release(&ptable.lock);
+  return 0;
+}
+
+
+int mprotect(void *addr, int len){
+  return 0;
+}
+
+
+int munprotect(void *addr, int len){
   return 0;
 }
