@@ -39,11 +39,11 @@ exec(char *path, char **argv)
     goto bad;
 
   // Load program into memory.
-  //sz = NULLOFF;  // for null pointer dereference
-  if(myproc()->pid < 3)
-    sz = 0;
-  else
-    sz = NULLOFF;
+  //sz = NULLOFF;
+  // if(myproc()->pid < 1)
+  //   sz = 0;
+  // else
+  sz = NULLOFF;   // for null pointer dereference
   for(i=0, off=elf.phoff; i<elf.phnum; i++, off+=sizeof(ph)){
     if(readi(ip, (char*)&ph, off, sizeof(ph)) != sizeof(ph))
       goto bad;
@@ -53,7 +53,7 @@ exec(char *path, char **argv)
       goto bad;
     if(ph.vaddr + ph.memsz < ph.vaddr)
       goto bad;
-    //cprintf("pid:%d \t allocuvm: %x \t %x\n", curproc->pid, sz, ph.vaddr + ph.memsz);
+   // cprintf("pid:%d \t allocuvm: %x \t %x\n", curproc->pid, sz, ph.vaddr + ph.memsz);
     if((sz = allocuvm(pgdir, sz, ph.vaddr + ph.memsz)) == 0)
       goto bad;
     if(ph.vaddr % PGSIZE != 0)

@@ -7,6 +7,9 @@
 #include "proc.h"
 #include "elf.h"
 
+
+//#define MPROTECT_DEBUG
+
 extern char data[];  // defined by kernel.ld
 pde_t *kpgdir;  // for use in scheduler()
 
@@ -385,6 +388,86 @@ copyout(pde_t *pgdir, uint va, void *p, uint len)
   }
   return 0;
 }
+
+int mprotect(void *addr, int len){
+  struct proc *p = myproc();
+  // pde_t *pde;
+  // pte_t *pgtab;
+  pte_t *pte;
+  pde_t *pgdir = p->pgdir;
+
+  //check args
+  if((uint)addr < 0 || ((uint)addr & 0x111) || len <= 0 || (uint)addr >= p->sz ||
+   (uint)addr + len*PGSIZE > p->sz)
+  {
+    return -1;
+  }
+
+  for(int i = 0; i < len; i++){
+    // pde = &pgdir[PDX(addr)];
+    // pgtab = (pte_t*)P2V(PTE_ADDR(*pde));
+    // pte = &pgtab[PTX(addr)];
+    if((pte = walkpgdir(pgdir, addr, 0)) == 0)
+      return -1;
+
+    #ifdef MPROTECT_DEBUG
+    cprintf("pte before = %x,  addr= %x", *pte, addr);
+    #endif
+
+    if(!(*pte & PTE_P))
+      return -1;
+    *pte = *pte & (~PTE_W);
+    lcr3(V2P(p->pgdir));
+
+    #ifdef MPROTECT_DEBUG
+    cprintf(" pte after = %x\n", *pte);
+    #endif
+
+    addr += PGSIZE;
+  }
+  return 0;
+}
+
+
+int munprotect(void *addr, int len){
+  struct proc *p = myproc();
+  // pde_t *pde;
+  // pte_t *pgtab;
+  pte_t *pte;
+  pde_t *pgdir = p->pgdir;
+
+  //check args
+  if((uint)addr < 0 || ((uint)addr & 0x111) || (uint)addr >= p->sz ||
+   len <= 0 || (uint)addr + len*PGSIZE > p->sz )
+  {
+    return -1;
+  }
+  for(int i = 0; i < len; i++){
+    // pde = &pgdir[PDX(addr)];
+    // pgtab = (pte_t*)P2V(PTE_ADDR(*pde));
+    // pte = &pgtab[PTX(addr)];
+    if((pte = walkpgdir(pgdir, addr, 0)) == 0)
+      return -1;
+
+    #ifdef MPROTECT_DEBUG
+    cprintf("pte before = %x,  addr= %x", *pte, addr);
+    #endif
+    
+    if(!(*pte & PTE_P))
+      return -1;
+    *pte = *pte | PTE_W;
+    lcr3(V2P(p->pgdir));
+    addr += PGSIZE;
+
+    #ifdef MPROTECT_DEBUG
+    cprintf(" pte after = %x\n", *pte);
+    #endif
+
+    
+  }
+  return 0;
+}
+
 
 //PAGEBREAK!
 // Blank page.
